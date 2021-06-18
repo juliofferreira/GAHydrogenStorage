@@ -651,7 +651,7 @@ constraints = {
 config = {
     'num_generations': 200,
     'population_size': 400,
-    'hall_of_fame_size': 1,
+    'hall_of_fame_size': 2,
     'num_repetitions': 2,
     'compound_list': list(elements),
 }
@@ -729,12 +729,18 @@ df = pd.concat(df_list, axis=0)
 
 df = df.reset_index(drop=True)
 
-df_ = pd.concat(df_list2, axis=1)
+df_ = pd.concat(df_list2, axis=0)
 
-df = df.join(df_)
-
-df = df.drop_duplicates()
-
+for ID in design:
+    df2 = df_.groupby([ID], as_index=False).first()
+    df = df.join(df2[ID])
+    
+for ID in constraints:
+    if ID == 'complexity' or ID == 'elements':
+        pass
+    else:
+        df2 = df_.groupby([ID], as_index=False).first()
+        df = df.join(df2[ID])
 
 
 now = datetime.now()
