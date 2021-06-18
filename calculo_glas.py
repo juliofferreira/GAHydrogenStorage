@@ -106,22 +106,22 @@ elements = np.array([
     "Mg",
     "Al",
     "Ti",
-    # "V",
-    # "Cr",
+    "V",
+    "Cr",
     "Mn",
-    # "Fe",
-    # "Co",
-    # "Ni",
-    # "Cu",
-    # "Zn",
-    # "Zr",
+    "Fe",
+    "Co",
+    "Ni",
+    "Cu",
+    "Zn",
+    "Zr",
     "Nb",
-    # "Mo",
-    # "Pd",
-    # "La",
-    # "Hf",
-    # "Ta",
-    # "W",
+    "Mo",
+    "Pd",
+    "La",
+    "Hf",
+    "Ta",
+    "W",
 ])
 
 allMolarMass = {element(i).symbol: element(i).mass for i in elements}
@@ -530,7 +530,7 @@ design = {
         'use_for_optimization': True,
         'config': {
             'min': 42,
-            'max': 90,
+            'max': 80,
             'objective': 'minimize',
             'weight': 1,
         }
@@ -649,10 +649,10 @@ constraints = {
 }
 
 config = {
-    'num_generations': 200,
+    'num_generations': 2000,
     'population_size': 400,
-    'hall_of_fame_size': 2,
-    'num_repetitions': 2,
+    'hall_of_fame_size': 1,
+    'num_repetitions': 20,
     'compound_list': list(elements),
 }
 
@@ -687,13 +687,12 @@ print()
 
 df_list = []
 df_list2 = []
-df_list3 = []
 
 for p, hof in enumerate(all_hof):
 
-    df = pd.DataFrame(normalizer(hof), columns=list(elements))*100
+    dfComp = pd.DataFrame(normalizer(hof), columns=list(elements))*100
 
-    df_list.append(df)
+    df_list.append(dfComp)
     
     dict_functions = {
            'VEC': parVEC, 
@@ -709,13 +708,13 @@ for p, hof in enumerate(all_hof):
         if ID == 'complexity' or ID == 'elements':
             pass
         else:
-            df = pd.DataFrame(dict_functions[ID](hof), columns=[ID])
-            df_list2.append(df)
+            dfComp = pd.DataFrame(dict_functions[ID](hof), columns=[ID])
+            df_list2.append(dfComp)
             
             
     for ID in design:
-         df = pd.DataFrame(dict_functions[ID](hof), columns=[ID])
-         df_list2.append(df)
+         dfComp = pd.DataFrame(dict_functions[ID](hof), columns=[ID])
+         df_list2.append(dfComp)
          
 
     print()
@@ -725,24 +724,23 @@ for p, hof in enumerate(all_hof):
         print(f'Position {n+1} (mol%)')
         S.report_dict(ind, verbose=True)
 
-df = pd.concat(df_list, axis=0)
+dfComp = pd.concat(df_list, axis=0)
 
-df = df.reset_index(drop=True)
+dfComp = dfComp.reset_index(drop=True)
 
-df_ = pd.concat(df_list2, axis=0)
+dfPar = pd.concat(df_list2, axis=0)
 
 for ID in design:
-    df2 = df_.groupby([ID], as_index=False).first()
-    df = df.join(df2[ID])
+    dfPar2 = dfPar[ID].dropna().reset_index(drop=True)
+    dfComp = dfComp.join(dfPar2)
     
 for ID in constraints:
     if ID == 'complexity' or ID == 'elements':
         pass
     else:
-        df2 = df_.groupby([ID], as_index=False).first()
-        df = df.join(df2[ID])
-
+        dfPar2 = dfPar[ID].dropna().reset_index(drop=True)
+        dfComp = dfComp.join(dfPar2)
 
 now = datetime.now()
 
-df.to_excel(f'{now.strftime("%d%m%Y_%H%M%S")}.xlsx')
+dfComp.to_excel(f'{now.strftime("%d%m%Y_%H%M%S")}.xlsx')
