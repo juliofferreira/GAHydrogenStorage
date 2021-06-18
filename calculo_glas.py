@@ -1,5 +1,6 @@
 from pprint import pprint
 from datetime import datetime
+from itertools import combinations
 
 import numpy as np
 import pandas as pd
@@ -63,13 +64,13 @@ class SearcherModified(Searcher):
                 print(f'{self.design[ID]["name"]} = Out of domain')
         
         dict_functions = {
-           'VEC': funcVEC, 
-           'phi': funcPhi,
-           'omega': funcOmega,
-           'delta': funcDelta,
-           'H hydrogen solution': funcHinf,
-           'H hydride formation': funcHf,
-           'molar mass': funcMM
+           'VEC': parVEC, 
+           'phi': parPhi,
+           'omega': parOmega,
+           'delta': parDelta,
+           'H hydrogen solution': parHinf,
+           'H hydride formation': parHf,
+           'molar mass': parMM
           } 
         for ID in constraints:
             if ID == 'complexity' or ID == 'elements':
@@ -105,9 +106,9 @@ elements = np.array([
     "Mg",
     "Al",
     "Ti",
-    "V",
+    # "V",
     # "Cr",
-    # "Mn",
+    "Mn",
     # "Fe",
     # "Co",
     # "Ni",
@@ -152,160 +153,142 @@ def normalizer(compositions):
     return normValues
 
 
-def Sc(compositions):
-    compNorm = normalizer(compositions)
+def Smix(compNorm):
     x = np.sum(np.nan_to_num((compNorm) * np.log(compNorm)), axis=1)
-    Sc = -constants.R * 10 ** -3 * x
-    return Sc
+    Smix = -constants.R * 10 ** -3 * x
+    return Smix
 
 
-def Tm(compositions):
-    compNorm = normalizer(compositions)
+def Tm(compNorm):
     Tm = np.sum(compNorm * arrMeltingT, axis=1)
     return Tm
 
 
-def Hmix(compositions):  
-    compNorm = normalizer(compositions)
-    i = 0
-    j = i + 1
-    Hmix = 0
-    compLenght = len(compNorm[0])
-    for x in range(0, compLenght-1):
-        while j < compLenght:
-            a = 4 * dfHmix[elements[x]][elements[j]] * compNorm[:, x] * compNorm[:, j]
-            Hmix += a
-            j += 1
-        i += 1
-        j = i + 1    
+def Hmix(compNorm):
+    elements_present = compNorm.sum(axis=0).astype(bool)
+    compNorm = compNorm[:, elements_present]
+    element_names = elements[elements_present]
+    Hmix = np.zeros(compNorm.shape[0])
+    for i, j in combinations(range(len(element_names)), 2):
+        Hmix = (
+            Hmix
+            + 4
+            * dfHmix[element_names[i]][element_names[j]]
+            * compNorm[:, i]
+            * compNorm[:, j]
+        )
+        
     return Hmix
 
 
-def Se(compositions, AP):
-    compNorm = normalizer(compositions)
-    Se = (eq4B(compNorm, AP) - np.log(Z(compNorm, AP)) - (3-2*AP) * (1-AP)**-2 + 3 + np.log((1+AP+AP**2-AP**3) * (1-AP)**-3)) * constants.R*10**-3
-    return Se
-
-
-def Sh(compositions):
-    compNorm = normalizer(compositions)
+def Sh(compNorm):
     Sh = abs(Hmix(compNorm)) / Tm(compNorm)
     return Sh
 
 
-def deltaij(i, j, compositions, AP):
-    compNorm = normalizer(compositions)
-    csi_i_compNorm = csi_i(compNorm, AP)
-    element1Size = arrAtomicSize[i]*2
-    element2Size = arrAtomicSize[j]*2
-    deltaij = ((csi_i_compNorm[:,i]*csi_i_compNorm[:,j])**(1/2)/AP)*(((element1Size - element2Size)**2)/(element1Size * element2Size))*(compNorm[:,i] * compNorm[:,j])**(1/2)
-    return deltaij
-
-
-def csi_i(compositions, AP):
-    compNorm = normalizer(compositions)
+def csi_i(compNorm, AP):
     supportValue = np.sum((1/6)*math.pi*(arrAtomicSize*2)**3*compNorm, axis=1)
     rho = AP/supportValue
     csi_i = (1/6)*math.pi*rho[:, None]*(arrAtomicSize*2)**3*compNorm
     return csi_i
 
 
-def Z(compositions, AP):
-    compNorm = normalizer(compositions)
+def deltaij(i, j, newCompNorm, newArrAtomicSize, csi_i_newCompNorm, AP):
+    element1Size = newArrAtomicSize[i]*2
+    element2Size = newArrAtomicSize[j]*2
+    deltaij = ((csi_i_newCompNorm[:,i]*csi_i_newCompNorm[:,j])**(1/2)/AP)*(((element1Size - element2Size)**2)/(element1Size * element2Size))*(newCompNorm[:,i] * newCompNorm[:,j])**(1/2)
+    return deltaij
+
+
+def y1_y2(compNorm, AP):
+    csi_i_compNorm = csi_i(compNorm, AP)
+    elements_present = compNorm.sum(axis=0).astype(bool)
+    newCompNorm = compNorm[:, elements_present]
+    newCsi_i_compNorm = csi_i_compNorm[:, elements_present]
+    newArrAtomicSize = arrAtomicSize[elements_present]
+    y1 = np.zeros(newCompNorm.shape[0])
+    y2 = np.zeros(newCompNorm.shape[0])
+    for i, j in combinations(range(len(newCompNorm[0])), 2):
+        deltaijValue = deltaij(i, j, newCompNorm, newArrAtomicSize, newCsi_i_compNorm, AP)
+        y1 += deltaijValue * (newArrAtomicSize[i]*2 + newArrAtomicSize[j]*2) * (newArrAtomicSize[i]*2*newArrAtomicSize[j]*2)**(-1/2)
+        y2_ = np.sum((newCsi_i_compNorm/AP) * (((newArrAtomicSize[i]*2*newArrAtomicSize[j]*2)**(1/2)) / (newArrAtomicSize*2)), axis=1)
+        y2 += deltaijValue * y2_
+    return y1, y2
+    
+
+def y3(compNorm, AP):
+    csi_i_compNorm = csi_i(compNorm, AP)
+    x = (csi_i_compNorm/AP)**(2/3)*compNorm**(1/3)
+    y3 = (np.sum(x, axis=1))**3
+    return y3
+
+
+def Z(compNorm, AP):
     y1Values, y2Values = y1_y2(compNorm, AP)
     y3Values = y3(compNorm, AP)
     Z = ((1+AP+AP**2) - 3*AP*(y1Values+y2Values*AP) - AP**3*y3Values) * (1-AP)**(-3)
     return Z
 
 
-def y1_y2(compositions, AP):
-    compNorm = normalizer(compositions)
-    i = 0
-    j = i + 1
-    y1 = 0
-    y2 = 0
-    y2_ = 0
-    compLenght = len(compNorm[0])
-    csi_i_compNorm = csi_i(compNorm, AP)
-    for x in range(0, compLenght-1):
-        while j < compLenght:
-            a = deltaij(x, j, compNorm, AP) * (arrAtomicSize[x]*2 + arrAtomicSize[j]*2) * (arrAtomicSize[x]*2*arrAtomicSize[j]*2)**(-1/2)
-            y1 += a
-            for z in range(0, compLenght):
-                b = (csi_i_compNorm[:,z]/AP) * (((arrAtomicSize[x]*2*arrAtomicSize[j]*2)**(1/2)) / (arrAtomicSize[z]*2))
-                y2_ = y2_ + b
-            a = deltaij(x, j, compNorm, AP) * y2_
-            y2 += a
-            y2_ = 0
-            j += 1
-        i += 1
-        j = i + 1
-    return y1, y2
-
-
-def y3(compositions, AP):
-    compNorm = normalizer(compositions)
-    csi_i_compNorm = csi_i(compNorm,AP)
-    x = (csi_i_compNorm/AP)**(2/3)*compNorm**(1/3)
-    y3 = (np.sum(x, axis=1))**3
-    return y3
-
-
-def eq4B(compositions, AP):
-    compNorm = normalizer(compositions)
+def eq4B(compNorm, AP):
     y1Values, y2Values = y1_y2(compNorm, AP)
-    y3Values = y3(compositions, AP)
+    y3Values = y3(compNorm, AP)
     eq4B = -(3/2) * (1-y1Values+y2Values+y3Values) + (3*y2Values+2*y3Values) * (1-AP)**-1 + (3/2) * (1-y1Values-y2Values-(1/3)*y3Values) * (1-AP)**-2 + (y3Values-1) * np.log(1-AP)
     return eq4B
 
 
-def funcDelta(compositions):
+def Se(compNorm, AP):
+    Se = (eq4B(compNorm, AP) - np.log(Z(compNorm, AP)) - (3-2*AP) * (1-AP)**-2 + 3 + np.log((1+AP+AP**2-AP**3) * (1-AP)**-3)) * constants.R*10**-3
+    return Se
+
+
+def parDelta(compositions):
     compNorm = normalizer(compositions)
     atomicSizeMean = np.sum(compNorm * arrAtomicSize, axis=1)
     delta = (np.sum(compNorm*(1-(arrAtomicSize/atomicSizeMean[:, None]))**2, axis=1))**(1/2)
     return delta
 
 
-def funcHinf(compositions):
+def parHinf(compositions):
     compNorm = normalizer(compositions)
     Hinf = compNorm * arrHinf
     HinfFinal = np.sum(Hinf, axis=1)
     return HinfFinal
 
 
-def funcHf(compositions):
+def parHf(compositions):
     compNorm = normalizer(compositions)
     Hf = compNorm * arrHf
     HfFinal = np.sum(Hf, axis=1)
     return HfFinal
 
 
-def funcVEC(compositions):
+def parVEC(compositions):
     compNorm = normalizer(compositions)
     VEC = compNorm * arrVEC
     VECFinal = np.sum(VEC, axis=1)
     return VECFinal
 
 
-def funcOmega(compositions):  
+def parOmega(compositions):  
     compNorm = normalizer(compositions)
-    omega = (Tm(compNorm) * Sc(compNorm)) / abs(Hmix(compNorm))
+    omega = (Tm(compNorm) * Smix(compNorm)) / abs(Hmix(compNorm))
     return omega
 
 
-def funcMM(compositions):
+def parMM(compositions):
     compNorm = normalizer(compositions)
     MMElements = compNorm * arrMolarMass
     MMFinal = np.sum(MMElements, axis=1)
     return MMFinal
 
 
-def funcPhi(compositions):
+def parPhi(compositions):
     compNorm = normalizer(compositions)
     SeBCC = Se(compNorm, 0.68)
     SeFCC = Se(compNorm, 0.74)
     SeMean = (abs(SeBCC) + abs(SeFCC)) / 2
-    phi = (Sc(compNorm) - Sh(compNorm)) / SeMean
+    phi = (Smix(compNorm) - Sh(compNorm)) / SeMean
     return phi
 
 
@@ -319,7 +302,7 @@ class PredictMM(Predict):
         self.domain = {el: [0,1] for el in all_elements}
 
     def predict(self, population_dict):
-        value = funcMM(population_dict['population_array'])
+        value = parMM(population_dict['population_array'])
         return value
 
     def get_domain(self):
@@ -335,7 +318,7 @@ class PredictHinf(Predict):
         self.domain = {el: [0,1] for el in all_elements}
 
     def predict(self, population_dict):
-        value = funcHinf(population_dict['population_array'])
+        value = parHinf(population_dict['population_array'])
         return value
 
     def get_domain(self):
@@ -351,7 +334,7 @@ class PredictHf(Predict):
         self.domain = {el: [0,1] for el in all_elements}
 
     def predict(self, population_dict):
-        value = funcHf(population_dict['population_array'])
+        value = parHf(population_dict['population_array'])
         return value
 
     def get_domain(self):
@@ -371,7 +354,7 @@ class ConstraintPhi(Constraint):
         self.config = config
 
     def compute(self, population_dict, base_penalty):
-        value = funcPhi(population_dict['population_array'])
+        value = parPhi(population_dict['population_array'])
         bad = value <= self.config['min']
 
         distance_min = self.config['min'] - value
@@ -410,7 +393,7 @@ class ConstraintOmega(Constraint):
         self.config = config
 
     def compute(self, population_dict, base_penalty):
-        value = funcOmega(population_dict['population_array'])
+        value = parOmega(population_dict['population_array'])
         bad = value <= self.config['min']
 
         distance_min = self.config['min'] - value
@@ -427,7 +410,7 @@ class ConstraintDelta(Constraint):
         self.config = config
 
     def compute(self, population_dict, base_penalty):
-        value = funcDelta(population_dict['population_array'])
+        value = parDelta(population_dict['population_array'])
         bad = value >= self.config['max']
 
         distance_max = value - self.config['max']
@@ -444,7 +427,7 @@ class ConstraintVEC(Constraint):
         self.config = config
 
     def compute(self, population_dict, base_penalty):
-        value = funcVEC(population_dict['population_array'])
+        value = parVEC(population_dict['population_array'])
         bad = value >= self.config['max']
 
         distance_max = value - self.config['max']
@@ -461,7 +444,7 @@ class ConstraintMM(Constraint):
         self.config = config
 
     def compute(self, population_dict, base_penalty):
-        value = funcMM(population_dict['population_array'])
+        value = parMM(population_dict['population_array'])
         bad = value >= self.config['max']
 
         distance_max = value - self.config['max']
@@ -478,7 +461,7 @@ class ConstraintHinf(Constraint):
         self.config = config
 
     def compute(self, population_dict, base_penalty):
-        value = funcHinf(population_dict['population_array'])
+        value = parHinf(population_dict['population_array'])
         bad = value >= self.config['max']
 
         distance_max = value - self.config['max']
@@ -495,7 +478,7 @@ class ConstraintHf(Constraint):
         self.config = config
 
     def compute(self, population_dict, base_penalty):
-        value = funcHf(population_dict['population_array'])
+        value = parHf(population_dict['population_array'])
         bad = value >= self.config['max']
 
         distance_max = value - self.config['max']
@@ -561,7 +544,7 @@ design = {
     #         'min': -45,
     #         'max': -30,
     #         'objective': 'minimize',
-    #         'weight': 1,
+    #         'weight': 5,
     #     }
     # },
 
@@ -606,12 +589,12 @@ constraints = {
         },
     },
 
-    # 'phi': {
-    #     'class': ConstraintPhi,
-    #     'config': {
-    #         'min': 20,
-    #     },
-    # },
+    'phi': {
+        'class': ConstraintPhi,
+        'config': {
+            'min': 20,
+        },
+    },
 
     # 'complexity': {
     #     'class': ConstraintComplexity,
@@ -666,10 +649,10 @@ constraints = {
 }
 
 config = {
-    'num_generations': 2000,
+    'num_generations': 200,
     'population_size': 400,
-    'hall_of_fame_size': 10,
-    'num_repetitions': 1,
+    'hall_of_fame_size': 1,
+    'num_repetitions': 2,
     'compound_list': list(elements),
 }
 
@@ -713,13 +696,13 @@ for p, hof in enumerate(all_hof):
     df_list.append(df)
     
     dict_functions = {
-           'VEC': funcVEC, 
-           'phi': funcPhi,
-           'omega': funcOmega,
-           'delta': funcDelta,
-           'H hydrogen solution': funcHinf,
-           'H hydride formation': funcHf,
-           'molar mass': funcMM
+           'VEC': parVEC, 
+           'phi': parPhi,
+           'omega': parOmega,
+           'delta': parDelta,
+           'H hydrogen solution': parHinf,
+           'H hydride formation': parHf,
+           'molar mass': parMM
           } 
         
     for ID in constraints:
@@ -733,7 +716,7 @@ for p, hof in enumerate(all_hof):
     for ID in design:
          df = pd.DataFrame(dict_functions[ID](hof), columns=[ID])
          df_list2.append(df)
-            
+         
 
     print()
     print(f'------- RUN {p+1} -------------')
@@ -744,9 +727,11 @@ for p, hof in enumerate(all_hof):
 
 df = pd.concat(df_list, axis=0)
 
-df = df.join(df_list2)
+df = df.reset_index(drop=True)
 
-df = df.join(df_list3)
+df_ = pd.concat(df_list2, axis=1)
+
+df = df.join(df_)
 
 df = df.drop_duplicates()
 
