@@ -508,10 +508,10 @@ class ConstraintElements(Constraint):
 
         for n, el in enumerate(self.elemental_domain):
             el_atomic_frac = norm_pop[:, n]
-            el_domain = self.elemental_domain.get(el, [0, 0])
+            el_domain = self.elemental_domain.get(el, [[0, 0], True])
 
-            logic1 = el_atomic_frac > el_domain[0]
-            distance[logic1] += el_atomic_frac[logic1] - el_domain[0]
+            logic1 = el_atomic_frac > el_domain[0][1]
+            distance[logic1] += el_atomic_frac[logic1] - el_domain[0][1]
 
             logic2 = el_atomic_frac < el_domain[0][0]
             distance[logic2] += el_domain[0][0] - el_atomic_frac[logic2]
@@ -528,7 +528,7 @@ class ConstraintElements(Constraint):
         penalty = distance
 
         return penalty
-    
+
 
 ###############################################################################
 #                            Configuração de Busca                            #
@@ -578,27 +578,28 @@ constraints = {
     'elements': {
         'class': ConstraintElements,
         'config': {
-            'Mg': [0.15, 0.35],
-            'Al': [0.05, 0.35],
-            'Ti': [0.05, 0.35],
-            'V': [0.05, 0.35],
-            'Mn': [0.05, 0.35],
-            'Fe': [0.05, 0.35],
-            'Co': [0.05, 0.35],
-            'Ni': [0.05, 0.35],
-            'Cu': [0.05, 0.35],
-            'Zn': [0.05, 0.35],
-            'Zr': [0.05, 0.35],
-            'Nb': [0.05, 0.35],
-            'Mo': [0.05, 0.35],
-            'Pd': [0.05, 0.35],
-            'La': [0.05, 0.35],
-            'Hf': [0.05, 0.35],
-            'Ta': [0.05, 0.35],
-            'W': [0.05, 0.35],
+            'Mg': [[0.15, 0.35], False],
+            'Al': [[0.05, 0.35], True],
+            'Ti': [[0.05, 0.35], True],
+            'V': [[0.05, 0.35], True],
+            'Cr': [[0.05, 0.35], True],
+            'Mn': [[0.05, 0.35], True],
+            'Fe': [[0.05, 0.35], True],
+            'Co': [[0.05, 0.35], True],
+            'Ni': [[0.05, 0.35], True],
+            'Cu': [[0.05, 0.35], True],
+            'Zn': [[0.05, 0.35], True],
+            'Zr': [[0.05, 0.35], True],
+            'Nb': [[0.05, 0.35], True],
+            'Mo': [[0.05, 0.35], True],
+            'Pd': [[0.05, 0.35], True],
+            'La': [[0.05, 0.35], True],
+            'Hf': [[0.05, 0.35], True],
+            'Ta': [[0.05, 0.35], True],
+            'W': [[0.05, 0.35], True],
         },
     },
-    
+
     'phi': {
         'class': ConstraintPhi,
         'config': {
