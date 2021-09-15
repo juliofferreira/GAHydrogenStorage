@@ -155,7 +155,7 @@ def normalizer(compositions):
 
 def Smix(compNorm):
     x = np.sum(np.nan_to_num((compNorm) * np.log(compNorm)), axis=1)
-    Smix = -constants.R * 10 ** -3 * x
+    Smix = -constants.R * 10**-3 * x
     return Smix
 
 
@@ -177,7 +177,6 @@ def Hmix(compNorm):
             * compNorm[:, i]
             * compNorm[:, j]
         )
-        
     return Hmix
 
 
@@ -383,7 +382,7 @@ class ConstraintComplexity(Constraint):
         distance[logic1] += distance_min[logic1]
         distance[logic2] += distance_max[logic2]
 
-        penalty = bad * base_penalty + distance**2
+        penalty = bad * (base_penalty + 10000) + distance**10
         return penalty
     
 
@@ -428,11 +427,16 @@ class ConstraintVEC(Constraint):
 
     def compute(self, population_dict, base_penalty):
         value = parVEC(population_dict['population_array'])
-        bad = value >= self.config['max']
+        logic1 = value <= self.config['min']
+        logic2 = value >= self.config['max']
+        bad = np.logical_or(logic1, logic2)
 
+        distance_min = self.config['min'] - value
         distance_max = value - self.config['max']
+        
         distance = np.zeros(len(value))
-        distance[bad] += distance_max[bad]
+        distance[logic1] += distance_min[logic1]
+        distance[logic2] += distance_max[logic2]
 
         penalty = bad * base_penalty + distance**2
         return penalty
@@ -506,18 +510,25 @@ class ConstraintElements(Constraint):
             el_atomic_frac = norm_pop[:, n]
             el_domain = self.elemental_domain.get(el, [0, 0])
 
-            logic1 = el_atomic_frac > el_domain[1]
-            distance[logic1] += el_atomic_frac[logic1] - el_domain[1]
+            logic1 = el_atomic_frac > el_domain[0]
+            distance[logic1] += el_atomic_frac[logic1] - el_domain[0]
 
-            logic2 = el_atomic_frac < el_domain[0]
-            distance[logic2] += el_domain[0] - el_atomic_frac[logic2]
+            logic2 = el_atomic_frac < el_domain[0][0]
+            distance[logic2] += el_domain[0][0] - el_atomic_frac[logic2]
+            
+            logic3 = el_domain[1]
+            logic4 = el_atomic_frac != 0
+            logic5 = np.logical_and(logic3, logic4)
+            logic6 = np.logical_and(logic5, logic2)
+            distance[logic6] += el_atomic_frac[logic6]
+            
 
         logic = distance > 0
         distance[logic] = (100 * distance[logic])**2 + base_penalty
         penalty = distance
 
         return penalty
-
+    
 
 ###############################################################################
 #                            Configuração de Busca                            #
@@ -530,7 +541,7 @@ design = {
         'use_for_optimization': True,
         'config': {
             'min': 42,
-            'max': 80,
+            'max': 60,
             'objective': 'minimize',
             'weight': 1,
         }
@@ -567,27 +578,51 @@ constraints = {
     'elements': {
         'class': ConstraintElements,
         'config': {
-            'Mg': [0.10, 0.35],
-            # 'Al': [0.0, 0.35],
-            # 'Ti': [0.0, 0.35],
-            # 'V': [0.0, 0.35],
-            # 'Cr': [0.0, 0.35],
-            # 'Mn': [0.0, 0.35],
-            # 'Fe': [0.0, 0.35],
-            # 'Co': [0.0, 0.35],
-            # 'Ni': [0.0, 0.35],
-            # 'Cu': [0.0, 0.35],
-            # 'Zn': [0.0, 0.35],
-            # 'Zr': [0.0, 0.35],
-            # 'Nb': [0.0, 0.35],
-            # 'Mo': [0.0, 0.35],
-            # 'Pd': [0.0, 0.35],
-            # 'La': [0.0, 0.35],
-            # 'Hf': [0.0, 0.35],
-            # 'Ta': [0.0, 0.35],
-            # 'W': [0.0, 0.35],
+            'Mg': [0.15, 0.35],
+            'Al': [0.05, 0.35],
+            'Ti': [0.05, 0.35],
+            'V': [0.05, 0.35],
+            'Mn': [0.05, 0.35],
+            'Fe': [0.05, 0.35],
+            'Co': [0.05, 0.35],
+            'Ni': [0.05, 0.35],
+            'Cu': [0.05, 0.35],
+            'Zn': [0.05, 0.35],
+            'Zr': [0.05, 0.35],
+            'Nb': [0.05, 0.35],
+            'Mo': [0.05, 0.35],
+            'Pd': [0.05, 0.35],
+            'La': [0.05, 0.35],
+            'Hf': [0.05, 0.35],
+            'Ta': [0.05, 0.35],
+            'W': [0.05, 0.35],
         },
     },
+    
+    'minimum fraction': {
+        'class': ConstraintElements,
+        'config': {
+            'Mg': 0,
+            'Al': 0,
+            'Ti': 0,
+            'V': 0,
+            'Mn': 0,
+            'Fe': 0,
+            'Co': 0,
+            'Ni': 0,
+            'Cu': 0,
+            'Zn': 0,
+            'Zr': 0,
+            'Nb': 0,
+            'Mo': 0,
+            'Pd': 0,
+            'La': 0,
+            'Hf': 0,
+            'Ta': 0,
+            'W': 0,
+        },
+    },
+    
 
     'phi': {
         'class': ConstraintPhi,
@@ -596,13 +631,13 @@ constraints = {
         },
     },
 
-    # 'complexity': {
-    #     'class': ConstraintComplexity,
-    #     'config': {
-    #         'min_elements': 4,
-    #         'max_elements': 5,
-    #     },
-    # },
+    'complexity': {
+        'class': ConstraintComplexity,
+        'config': {
+            'min_elements': 5,
+            'max_elements': 8,
+        },
+    },
     
     # 'omega': {
     #     'class': ConstraintOmega,
@@ -618,10 +653,13 @@ constraints = {
     #     },
     # },
 
+####VEC -> VALORES ENTRE 1 E 12
+
     'VEC': {
         'class': ConstraintVEC,
         'config': {
             'max': 6.87,
+            'min': 1,
         },
     },
 
@@ -632,19 +670,19 @@ constraints = {
     #     },
     # },
 
-    'H hydrogen solution': {
-        'class': ConstraintHinf,
-        'config': {
-            'max': -20,
-        },
-    },
+    # 'H hydrogen solution': {
+    #     'class': ConstraintHinf,
+    #     'config': {
+    #         'max': -20,
+    #     },
+    # },
 
-    'H hydride formation': {
-        'class': ConstraintHf,
-        'config': {
-            'max': -40,
-        },
-    },
+    # 'H hydride formation': {
+    #     'class': ConstraintHf,
+    #     'config': {
+    #         'max': -40,
+    #     },
+    # },
     
 }
 
