@@ -599,31 +599,6 @@ constraints = {
         },
     },
     
-    'minimum fraction': {
-        'class': ConstraintElements,
-        'config': {
-            'Mg': 0,
-            'Al': 0,
-            'Ti': 0,
-            'V': 0,
-            'Mn': 0,
-            'Fe': 0,
-            'Co': 0,
-            'Ni': 0,
-            'Cu': 0,
-            'Zn': 0,
-            'Zr': 0,
-            'Nb': 0,
-            'Mo': 0,
-            'Pd': 0,
-            'La': 0,
-            'Hf': 0,
-            'Ta': 0,
-            'W': 0,
-        },
-    },
-    
-
     'phi': {
         'class': ConstraintPhi,
         'config': {
